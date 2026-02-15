@@ -23,7 +23,14 @@ Domain	Medical Diagnostics
 Source	scikit-learn built-in dataset
 The 30 features represent computed measurements of cell nuclei from breast mass images obtained via FNA biopsy.
 
-# 3. Model Performance Comparison
+# 3. Logistic Regression – Metrics Table
+
+| ML Model Name        | Accuracy |   AUC   | Precision | Recall |   F1    |   MCC   |
+|----------------------|----------|---------|-----------|--------|---------|---------|
+| Logistic Regression  | 0.9825   | 0.9954  | 0.9861    | 0.9861 | 0.9861  | 0.9623 
+
+
+# 4. Model Performance Comparison
 
 | Model                 | Accuracy |   AUC   | Precision | Recall |  F1 Score |   MCC   |
 |-----------------------|----------|---------|-----------|--------|-----------|---------|
@@ -34,7 +41,7 @@ The 30 features represent computed measurements of cell nuclei from breast mass 
 | Random Forest         | 0.9474   | 0.9937  | 0.9583    | 0.9583 | 0.9583    | 0.8869  |
 | XGBoost               | 0.9561   | 0.9950  | 0.9467    | 0.9861 | 0.9660    | 0.9058  |
 
-# 4. Key Observations & Model Analysis
+# 5. Key Observations & Model Analysis
 
 | Model                 | Key Observation & Analysis |
 |-----------------------|----------------------------|
@@ -46,7 +53,7 @@ The 30 features represent computed measurements of cell nuclei from breast mass 
 | XGBoost               | **High Reliability:** Gradient boosting achieved excellent balance of precision and recall, yielding one of the highest AUC scores (0.9950). |
 
 	
-# 5. Streamlit App Features
+# 6. Streamlit App Features
 	•  Model Selection Dropdown
 	•  Evaluation Metrics Table
 	•  Color Confusion Matrix
