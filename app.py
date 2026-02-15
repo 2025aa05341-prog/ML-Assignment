@@ -1,6 +1,6 @@
-
 # app.py (FAST, CLEAN, NO hard dependency on joblib)
-# Streamlit app for ML Assignment‑2 — loads pickled models with a safe fallback.
+# Streamlit app for ML Assignment‑2 — loads pickled models with a safe fallback. sharath
+
 
 from pathlib import Path
 import numpy as np
@@ -204,7 +204,7 @@ if uploaded is not None:
         preds = model.predict(test_df)
         scores = get_proba_or_score(model, test_df)
 
-        out = pd.DataFrame({"prediction": preds.astype(int)})
+        out = pd.DataFrame({"prediction": preds.astype(int)}))
         if scores is not None:
             if hasattr(model, "predict_proba"):
                 out["prob_class_1"] = scores
