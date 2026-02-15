@@ -1,221 +1,117 @@
-# app.py
-# Streamlit app for ML Assignment‑2 — loads pickled models with a safe fallback.
-
-from pathlib import Path
-import numpy as np
-import pandas as pd
 import streamlit as st
-
+import pandas as pd
+import numpy as np
+import pickle
+from pathlib import Path
 from sklearn.datasets import load_breast_cancer
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import (
-    accuracy_score,
-    precision_score,
-    recall_score,
-    f1_score,
-    matthews_corrcoef,
-    roc_auc_score,
-    confusion_matrix,
-    classification_report,
+    accuracy_score, precision_score, recall_score, 
+    f1_score, matthews_corrcoef, roc_auc_score, 
+    confusion_matrix, classification_report
 )
 
 # ------------------------
-# Page config
+# Page Configuration
 # ------------------------
-st.set_page_config(page_title="ML Assignment 2 — Breast Cancer", layout="wide")
-st.title("Machine Learning Assignment‑2 — Classification on Breast Cancer Dataset")
-st.caption("Lightweight app optimized for Streamlit Community Cloud. No hard dependency on joblib.")
+st.set_page_config(page_title="ML Assignment 2 - Breast Cancer", layout="wide")
+st.title("Machine Learning Assignment-2")
+st.subheader("Breast Cancer Classification Dashboard")
 
 # ------------------------
-# Constants
+# Step 1: Dataset Loader [cite: 27]
 # ------------------------
-MODEL_DIR = Path("model")
-MODEL_FILES = {
-    "Logistic Regression": MODEL_DIR / "logistic_regression.pkl",
-    "Decision Tree": MODEL_DIR / "decision_tree.pkl",
-    "kNN": MODEL_DIR / "knn.pkl",
-    "Naive Bayes": MODEL_DIR / "naive_bayes.pkl",
-    "Random Forest": MODEL_DIR / "random_forest.pkl",
-    "XGBoost": MODEL_DIR / "xgboost.pkl",
-}
-
-# Optional import check for XGBoost (to avoid unpickle errors if lib missing)
-try:
-    import xgboost  # noqa: F401
-    _XGB_AVAILABLE = True
-except Exception:
-    _XGB_AVAILABLE = False
-
-# ------------------------
-# Cached loaders
-# ------------------------
-@st.cache_resource(show_spinner=False)
-def load_dataset():
+@st.cache_resource
+def load_data():
     ds = load_breast_cancer()
     X = pd.DataFrame(ds.data, columns=ds.feature_names)
     y = pd.Series(ds.target, name="target")
-    return X, y, list(ds.feature_names), list(ds.target_names)
+    return X, y, ds.target_names
 
-# Robust artifact loader: try joblib → pickle
-@st.cache_resource(show_spinner=False)
-def load_artifact(path: Path):
-    # Try joblib if available
-    try:
-        import joblib  # local import; if missing, fall through
-        return joblib.load(path)
-    except Exception:
-        pass
-    # Fallback to pickle
-    import pickle
-    with open(path, 'rb') as f:
-        return pickle.load(f)
+X, y, target_names = load_data()
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
 # ------------------------
-# Utilities
+# Step 6b: Model Selection Dropdown [cite: 92]
 # ------------------------
-def get_proba_or_score(model, X):
-    if hasattr(model, "predict_proba"):
-        try:
-            return model.predict_proba(X)[:, 1]
-        except Exception:
-            return None
-    if hasattr(model, "decision_function"):
-        try:
-            return model.decision_function(X)
-        except Exception:
-            return None
+MODEL_DIR = Path("model")
+MODEL_MAPPING = {
+    "Logistic Regression": "logistic_regression.pkl",
+    "Decision Tree": "decision_tree.pkl",
+    "kNN": "knn.pkl",
+    "Naive Bayes": "naive_bayes.pkl",
+    "Random Forest": "random_forest.pkl",
+    "XGBoost": "xgboost.pkl"
+}
+
+st.sidebar.header("Model Settings")
+model_choice = st.sidebar.selectbox("Select ML Model", list(MODEL_MAPPING.keys()))
+
+def load_pickled_model(name):
+    path = MODEL_DIR / MODEL_MAPPING[name]
+    if path.exists():
+        with open(path, 'rb') as f:
+            return pickle.load(f)
     return None
 
-# ------------------------
-# Data preparation (single split)
-# ------------------------
-X, y, feature_names, target_names = load_dataset()
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.2, stratify=y, random_state=42
-)
+model = load_pickled_model(model_choice)
 
-# ------------------------
-# Sidebar controls
-# ------------------------
-st.sidebar.header("Controls")
-
-# Detect which model files exist
-existing = {name: p for name, p in MODEL_FILES.items() if p.exists()}
-
-# If xgboost lib is missing, drop XGBoost even if file exists (cannot unpickle)
-if "XGBoost" in existing and not _XGB_AVAILABLE:
-    del existing["XGBoost"]
-    st.sidebar.warning("XGBoost library not available — skipping XGBoost model.")
-
-if not existing:
-    st.error(
-        "No usable model artifacts found in ./model. Run `python generate_models.py` "
-        "locally to produce the .pkl files, then redeploy."
-    )
-    st.stop()
-
-model_name = st.sidebar.selectbox("Select model", list(existing.keys()), index=0)
-
-# ------------------------
-# Load selected model (fast)
-# ------------------------
-model_path = existing[model_name]
-try:
-    model = load_artifact(model_path)
-except Exception as e:
-    st.error(f"Failed to load model: {model_path}\nError: {e}")
+if model is None:
+    st.error(f"Error: {MODEL_MAPPING[model_choice]} not found in /model folder. Run your training script first.")
     st.stop()
 
 # ------------------------
-# Evaluate on test split
+# Step 6c: Display Evaluation Metrics [cite: 93]
 # ------------------------
-with st.spinner(f"Evaluating {model_name} ..."):
-    y_pred = model.predict(X_test)
-    y_score = get_proba_or_score(model, X_test)
-
+y_pred = model.predict(X_test)
+# Required metrics: Acc, AUC, Prec, Rec, F1, MCC [cite: 40, 41, 42, 43, 44, 45, 46]
 metrics = {
     "Accuracy": accuracy_score(y_test, y_pred),
     "Precision": precision_score(y_test, y_pred),
     "Recall": recall_score(y_test, y_pred),
-    "F1": f1_score(y_test, y_pred),
+    "F1 Score": f1_score(y_test, y_pred),
     "MCC": matthews_corrcoef(y_test, y_pred),
-    "AUC": (roc_auc_score(y_test, y_score) if y_score is not None else np.nan),
 }
 
-st.subheader("Evaluation Metrics (Test Split)")
-metrics_df = (
-    pd.DataFrame([metrics]).T.reset_index().rename(columns={"index": "Metric", 0: "Value"})
-)
-metrics_df["Value"] = metrics_df["Value"].apply(
-    lambda v: round(float(v), 4) if isinstance(v, (float, np.floating)) else v
-)
-st.dataframe(metrics_df, use_container_width=True)
+if hasattr(model, "predict_proba"):
+    metrics["AUC Score"] = roc_auc_score(y_test, model.predict_proba(X_test)[:, 1])
+else:
+    metrics["AUC Score"] = 0.0
 
-# Confusion matrix table (no heavy plotting)
-st.subheader("Confusion Matrix")
-cm = confusion_matrix(y_test, y_pred)
-cm_df = pd.DataFrame(cm, index=["Actual 0", "Actual 1"], columns=["Pred 0", "Pred 1"])
-st.dataframe(cm_df, use_container_width=True)
-
-# Classification report
-st.subheader("Classification Report")
-report_txt = classification_report(y_test, y_pred, target_names=target_names)
-st.code(report_txt, language="text")
+st.write(f"### Performance: {model_choice}")
+cols = st.columns(6)
+for i, (name, val) in enumerate(metrics.items()):
+    cols[i].metric(name, round(val, 4))
 
 # ------------------------
-# CSV upload for test data
+# Step 6d: Confusion Matrix & Report [cite: 94]
 # ------------------------
-st.subheader("Upload a test CSV (optional)")
-st.caption(
-    "Upload **only test data**. The CSV must have the same 30 feature columns "
-    "as the sklearn dataset (names must match)."
-)
-
-col1, _ = st.columns(2)
+col1, col2 = st.columns(2)
 with col1:
-    if st.button("Generate sample_test.csv (first 10 rows of X_test)"):
-        sample = X_test.iloc[:10].copy()
-        st.download_button(
-            label="Download sample_test.csv",
-            data=sample.to_csv(index=False).encode("utf-8"),
-            file_name="sample_test.csv",
-            mime="text/csv",
-        )
+    st.write("#### Confusion Matrix")
+    cm = confusion_matrix(y_test, y_pred)
+    st.dataframe(pd.DataFrame(cm, index=target_names, columns=target_names))
 
-uploaded = st.file_uploader("Choose CSV", type=["csv"])
-if uploaded is not None:
-    try:
-        test_df = pd.read_csv(uploaded)
-    except Exception as e:
-        st.error(f"Could not read CSV: {e}")
-        st.stop()
+with col2:
+    st.write("#### Classification Report")
+    st.code(classification_report(y_test, y_pred, target_names=target_names))
 
-    # Validate columns
-    missing = [c for c in feature_names if c not in test_df.columns]
-    extra = [c for c in test_df.columns if c not in feature_names]
+# ------------------------
+# Step 6a: Test Data Upload [cite: 91]
+# ------------------------
+st.divider()
+st.write("### Custom Prediction")
+uploaded_file = st.file_uploader("Upload test CSV data for prediction", type="csv")
 
-    if missing:
-        st.error(f"Missing expected columns: {missing[:10]}{' ...' if len(missing) > 10 else ''}")
-    else:
-        if extra:
-            st.warning(f"Extra columns will be ignored: {extra[:10]}{' ...' if len(extra) > 10 else ''}")
-        test_df = test_df[feature_names]
-        preds = model.predict(test_df)
-        scores = get_proba_or_score(model, test_df)
-
-        # FIXED: Removed extra parenthesis here
-        out = pd.DataFrame({"prediction": preds.astype(int)})
-        
-        if scores is not None:
-            if hasattr(model, "predict_proba"):
-                out["prob_class_1"] = scores
-            else:
-                out["score"] = scores
-
-        st.dataframe(out.head(20), use_container_width=True)
-        st.download_button(
-            "Download predictions",
-            out.to_csv(index=False).encode("utf-8"),
-            file_name="predictions.csv",
-            mime="text/csv",
-        )
+if uploaded_file:
+    test_df = pd.read_csv(uploaded_file)
+    # Ensure columns match training data
+    test_df = test_df.reindex(columns=X.columns, fill_value=0)
+    preds = model.predict(test_df)
+    
+    # FIXED: Corrected syntax here by removing extra parenthesis
+    out = pd.DataFrame({"prediction": preds.astype(int)})
+    
+    st.write("#### Results")
+    st.dataframe(out)
+    st.download_button("Download Predictions", out.to_csv(index=False), "predictions.csv")
