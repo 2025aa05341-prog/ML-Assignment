@@ -18,14 +18,17 @@ from sklearn.metrics import (
     classification_report,
 )
 
-# --- Page config ---
-st.set_page_config(page_title="ML Assignment 2", layout="wide")
-st.title("Machine Learning Assignment-2: Breast Cancer Classification")
-st.caption("Deployment of 6 ML models with performance comparison.")
+# ------------------------
+# Page Configuration [cite: 90]
+# ------------------------
+st.set_page_config(page_title="ML Assignment 2 - Breast Cancer", layout="wide")
+st.title("Machine Learning Assignment-2")
+st.markdown("### Classification on Breast Cancer Dataset")
 
-# --- Constants & Paths ---
+# ------------------------
+# Constants & Model Mapping [cite: 34-39, 55]
+# ------------------------
 MODEL_DIR = Path("model")
-# Required models [cite: 34-39]
 MODEL_FILES = {
     "Logistic Regression": MODEL_DIR / "logistic_regression.pkl",
     "Decision Tree": MODEL_DIR / "decision_tree.pkl",
@@ -35,9 +38,12 @@ MODEL_FILES = {
     "XGBoost": MODEL_DIR / "xgboost.pkl",
 }
 
-# --- Load Dataset [cite: 27] ---
+# ------------------------
+# Dataset Loader [cite: 27-30]
+# ------------------------
 @st.cache_resource
 def load_dataset():
+    # Breast Cancer: 30 features, 569 instances (meets >12 features, >500 instances) [cite: 30]
     ds = load_breast_cancer()
     X = pd.DataFrame(ds.data, columns=ds.feature_names)
     y = pd.Series(ds.target, name="target")
@@ -48,72 +54,81 @@ X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.2, stratify=y, random_state=42
 )
 
-# --- Sidebar: Model Selection [cite: 92] ---
+# ------------------------
+# Sidebar: Model Selection [cite: 92]
+# ------------------------
 st.sidebar.header("Controls")
 existing_models = [name for name, path in MODEL_FILES.items() if path.exists()]
 
 if not existing_models:
-    st.error("No model files found in /model directory. Please upload your .pkl files.")
+    st.error("No .pkl files found in /model directory. Please upload trained models.")
     st.stop()
 
-model_name = st.sidebar.selectbox("Select Model", existing_models)
+selected_model = st.sidebar.selectbox("Select Model", existing_models)
 
-# --- Load Selected Model ---
 @st.cache_resource
-def load_model(path):
+def get_model(path):
     with open(path, 'rb') as f:
         return pickle.load(f)
 
-current_model = load_model(MODEL_FILES[model_name])
+model = get_model(MODEL_FILES[selected_model])
 
-# --- Evaluation [cite: 40-46, 93] ---
-y_pred = current_model.predict(X_test)
-y_proba = current_model.predict_proba(X_test)[:, 1] if hasattr(current_model, "predict_proba") else None
+# ------------------------
+# Evaluation & Metrics Display [cite: 40-46, 93, 94]
+# ------------------------
+y_pred = model.predict(X_test)
+y_score = None
+if hasattr(model, "predict_proba"):
+    y_score = model.predict_proba(X_test)[:, 1]
 
+# Mandatory Metrics [cite: 41-46]
 metrics = {
     "Accuracy": accuracy_score(y_test, y_pred),
-    "AUC": roc_auc_score(y_test, y_proba) if y_proba is not None else 0.0,
+    "AUC Score": roc_auc_score(y_test, y_score) if y_score is not None else 0.0,
     "Precision": precision_score(y_test, y_pred),
     "Recall": recall_score(y_test, y_pred),
     "F1 Score": f1_score(y_test, y_pred),
-    "MCC": matthews_corrcoef(y_test, y_pred),
+    "MCC Score": matthews_corrcoef(y_test, y_pred),
 }
 
-st.subheader(f"Evaluation Metrics for {model_name}")
+st.subheader(f"Performance Metrics: {selected_model}")
 cols = st.columns(6)
 for i, (m_name, m_val) in enumerate(metrics.items()):
     cols[i].metric(m_name, f"{m_val:.4f}")
 
-# --- Confusion Matrix & Report [cite: 94] ---
 st.divider()
-col1, col2 = st.columns(2)
-with col1:
-    st.write("### Confusion Matrix")
-    cm = confusion_matrix(y_test, y_pred)
-    st.dataframe(pd.DataFrame(cm, index=target_names, columns=target_names))
+col_cm, col_cr = st.columns(2)
 
-with col2:
-    st.write("### Classification Report")
+with col_cm:
+    st.write("#### Confusion Matrix")
+    cm = confusion_matrix(y_test, y_pred)
+    st.dataframe(pd.DataFrame(cm, index=target_names, columns=target_names), use_container_width=True)
+
+with col_cr:
+    st.write("#### Classification Report")
     st.code(classification_report(y_test, y_pred, target_names=target_names))
 
-# --- CSV Upload for Test Data [cite: 91] ---
+# ------------------------
+# Dataset Upload (Step 6a) [cite: 91]
+# ------------------------
 st.divider()
-st.subheader("Upload Custom Test Data")
-uploaded_file = st.file_uploader("Upload CSV (ensure 30 feature columns match exactly)", type="csv")
+st.subheader("Predict on New Data")
+st.info("Upload a CSV file containing test data (30 features required).")
+uploaded_file = st.file_uploader("Upload Test CSV", type=["csv"])
 
-if uploaded_file is not None:
-    test_df = pd.read_csv(uploaded_file)
-    
-    # Validation
-    if all(col in test_df.columns for col in feature_names):
-        test_df = test_df[feature_names]
-        preds = current_model.predict(test_df)
+if uploaded_file:
+    try:
+        test_df = pd.read_csv(uploaded_file)
+        # Ensure correct column order
+        test_df = test_df.reindex(columns=feature_names, fill_value=0)
         
-        # Corrected prediction DataFrame format
+        preds = model.predict(test_df)
+        
+        # Corrected format [fixes the SyntaxError]
         out = pd.DataFrame({"prediction": preds.astype(int)})
         
-        st.write("### Predictions")
-        st.dataframe(out)
+        st.write("#### Prediction Results")
+        st.dataframe(out, use_container_width=True)
         st.download_button("Download Predictions", out.to_csv(index=False), "predictions.csv")
-    else:
-        st.error("CSV columns do not match Breast Cancer feature names.")
+    except Exception as e:
+        st.error(f"Error processing CSV: {e}")
